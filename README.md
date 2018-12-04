@@ -11,7 +11,7 @@ The DS18X20 family offers cheap 1-Wire temperature sensors. A single data line o
 The lists (one per sensor) which hold the temperature readings are pre-allocated. Also a list with labels (not shown on the graph, but anyhow mandatory) is prepared. The measurement daemon sleeps most of the time, but wakes up every 30 seconds. A lock is used when the daemon updates the temperature lists as the webserver could be reading these lists at the same time. The webserver is the most simple variant possible: regardless the clients request it always returns a page with a chart. The chart displays the last 60 temperature readings (as the list never grows beyond this number).
 
 ### Tools
-I used a WiPy 2 for this project, so had to be conservative in memory usage.
+I used a WiPy 2 for this project, so had to be conservative in memory usage. That is why the webpage is served in three different chuncks, where only the content of the second part (the data for the chart) is dynamic. This avoids recreating large strings over and over with the risk of memory fragmentation.
 Package onewire.py is copied from the Pycom documentation.
 The DS18X20 works perfectly on 3.3V, but do not forget to place a 4K7 resistor between Vdd and the sensors data line. It does not matter how many sensors are connected to that data line.
 Of course the WiPy must be visible in your network. See the Pycom documentation on how to setup WLAN.
