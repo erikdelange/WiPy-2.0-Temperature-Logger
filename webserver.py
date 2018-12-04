@@ -1,4 +1,4 @@
-html = b"""<!DOCTYPE html>
+html1 = b"""<!DOCTYPE html>
 <html lang="en">
     <head>
         <meta http-equiv="refresh" content="5">
@@ -13,9 +13,13 @@ html = b"""<!DOCTYPE html>
             </div>
         </div>
         <script>
+"""
+html2 = b"""
             var labels = %s;
             var sensor1 = %s;
             var sensor2 = %s;
+"""
+html3 = b"""
             var myChart = new Chart(document.getElementById("myChart"), {
                 type: 'line',
                 data: {
@@ -128,21 +132,23 @@ while True:
     conn, addr = serversocket.accept()
     request = conn.readline()
 
+    # print("request:", request)
+    
     while True:
         line = conn.readline()
         if line == b"" or line == b"\r\n":
             break
 
-    conn.sendall(b"HTTP/1.1 200 OK\nServer: WiPy\nContent-Type: text/html\nConnection: Closed\n\n")
+    conn.write(b"HTTP/1.1 200 OK\nServer: WiPy\nContent-Type: text/html\nConnection: Closed\n\n")
 
-    # print("request:", request)
-
+    conn.write(html1)
+    
     with t_lock:
-        response = html % (lbl, t0, t1)
+        conn.write(html2 % (lbl, t0, t1))
 
-    conn.send(response)
-    conn.sendall(b"\n")
+    conn.write(html3)
+    conn.write(b"\n")
     conn.close()
 
     gc.collect()
-    # print(gc.mem_free())
+    print(gc.mem_free())
