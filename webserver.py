@@ -1,4 +1,4 @@
-html1 = b"""<!DOCTYPE html>
+html1 = """<!DOCTYPE html>
 <html lang="en">
     <head>
         <meta http-equiv="refresh" content="5">
@@ -12,64 +12,17 @@ html1 = b"""<!DOCTYPE html>
                 <canvas id="myChart"></canvas>
             </div>
         </div>
+        """
+
+html2 = """
         <script>
-"""
-html2 = b"""
             var labels = %s;
             var sensor1 = %s;
             var sensor2 = %s;
-"""
-html3 = b"""
-            var myChart = new Chart(document.getElementById("myChart"), {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Sensor 1',
-                        borderColor: "#FF0000",
-                        data: sensor1,
-                        fill: false,
-                        pointRadius: 1
-                    }, {
-                       label: 'Sensor 2',
-                        borderColor: "#0000FF",
-                        data: sensor2,
-                        fill: false,
-                        pointRadius: 1
-                    }]
-                },
-                options: {
-                    title: {
-                        display: true,
-                        text: 'Temperature'
-                    },
-                    animation: false,
-                    scales: {
-                        yAxes: [{
-                            scaleLabel: {
-                                labelString: 'Degrees Celsius',
-                                display: true,
-                            },
-                            ticks: {
-                                suggestedMin: 0,
-                                suggestedMax: 70
-                            }
-                        }],
-                        xAxes: [{
-                            scaleLabel: {
-                                labelString: 'Minutes',
-                                display: true
-                            },
-                            //display: false,
-                            ticks: {
-                                display: false,
-                                maxTicksLimit: 30
-                            }
-                        }]
-                    }
-                }
-            });
         </script>
+        """
+
+html3 = """
     </body>
 </html>
 """
@@ -78,6 +31,7 @@ import gc
 import time
 import socket
 import _thread
+# import micropython
 from machine import Pin
 from onewire import DS18X20
 from onewire import OneWire
@@ -89,51 +43,52 @@ lbl = [i for i in range(NMEASUREMENTS)]
 t0 = [0.0] * NMEASUREMENTS
 t1 = [0.0] * NMEASUREMENTS
 
+buffer = bytearray(512)
+bmview = memoryview(buffer)
+
 t_lock = _thread.allocate_lock()
 
 
 def daemon():
-    global t0
-    global t1
-    global t_lock
-
+    """ Measure the temperature at fixed intervals """
     ds = DS18X20(OneWire(Pin.exp_board.G9))
     t = 0.0
 
     while True:
-        time.sleep(27)  # measure +- every 30 seconds
-
-        time.sleep_ms(750)
-        ds.start_conversion(ds.roms[0])
-        time.sleep_ms(750)
-        t = ds.read_temp_async(ds.roms[0])
-        with t_lock:
-            t0.append(t)
-            if len(t0) > NMEASUREMENTS:
-                del t0[0]
-
-        time.sleep_ms(750)
-        ds.start_conversion(ds.roms[1])
-        time.sleep_ms(750)
-        t = ds.read_temp_async(ds.roms[1])
-        with t_lock:
-            t1.append(t)
-            if len(t1) > NMEASUREMENTS:
-                del t1[0]
+        # measure +- every 30 seconds
+        time.sleep(27)
+        for i, tx in enumerate([t0, t1]):
+            time.sleep_ms(750)
+            ds.start_conversion(ds.roms[i])
+            time.sleep_ms(750)
+            t = ds.read_temp_async(ds.roms[i])
+            with t_lock:
+                tx.append(t)
+                if len(tx) > NMEASUREMENTS:
+                    del tx[0]
 
 
 _thread.start_new_thread(daemon, ())
 
+
+def serve(file, conn):
+    """ Send file to a connection in chuncks - lowering memory usage """
+    with open(file, "rb") as fp:
+        while True:
+            n = fp.readinto(buffer)
+            if n == 0:
+                break
+            conn.write(bmview[:n])
+
+
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-serversocket.bind(socket.getaddrinfo('0.0.0.0', 80)[0][-1])
-serversocket.listen(2)
+serversocket.bind(socket.getaddrinfo("", 80)[0][-1])
+serversocket.listen(1)
 
 while True:
     conn, addr = serversocket.accept()
     request = conn.readline()
 
-    # print("request:", request)
-    
     while True:
         line = conn.readline()
         if line == b"" or line == b"\r\n":
@@ -141,14 +96,16 @@ while True:
 
     conn.write(b"HTTP/1.1 200 OK\nServer: WiPy\nContent-Type: text/html\nConnection: Closed\n\n")
 
+    # serve the webpage
     conn.write(html1)
-    
     with t_lock:
         conn.write(html2 % (lbl, t0, t1))
 
+    serve("mychart.js", conn)
     conn.write(html3)
+
     conn.write(b"\n")
     conn.close()
 
     gc.collect()
-    print(gc.mem_free())
+    # micropython.mem_info()
