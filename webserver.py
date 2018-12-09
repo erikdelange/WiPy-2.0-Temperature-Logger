@@ -82,7 +82,7 @@ def serve(file, conn):
 
 
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-serversocket.bind(socket.getaddrinfo("", 80)[0][-1])
+serversocket.bind(socket.getaddrinfo("0.0.0.0", 80)[0][-1])
 serversocket.listen(1)
 
 while True:
